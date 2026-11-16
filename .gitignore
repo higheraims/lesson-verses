@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+
+# Manuscripts and converted editions. The tests write their own sample.
+*.docx

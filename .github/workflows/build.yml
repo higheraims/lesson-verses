@@ -1,0 +1,53 @@
+name: Build Windows exe
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # creating a release on a v* tag
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Build
+        run: python build.py
+
+      - name: Convert the sample with the built exe
+        shell: pwsh
+        run: |
+          python tests/sample.py write sample.docx
+          # A --windowed exe is a GUI program: PowerShell doesn't wait for it or pass back
+          # its exit code unless it is started this way.
+          $p = Start-Process -FilePath "dist\Lesson Verses.exe" `
+                 -ArgumentList '--convert', 'sample.docx', 'edition.docx' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "exe exited with $($p.ExitCode)" }
+          python tests/sample.py check edition.docx
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lesson-Verses-exe
+          path: dist/Lesson Verses.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$env:GITHUB_REF_NAME" "dist\Lesson Verses.exe" --generate-notes
